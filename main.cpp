@@ -1,5 +1,6 @@
 
 
+#include "imgui_impl_glfw.h"
 #include "vortex/model/mesh.h"
 #include "vortex/rendering/cubemap.h"
 #include "vortex/rendering/texture.h"
@@ -12,14 +13,19 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <vortex/rendering/shader.h>
 
+#include "vortex/imgui/layer.h"
 #include "vortex/matrix/camera.h"
 #include "vortex/model/mesh.h"
 #include "vortex/rendering/shadowMap.h"
+#include <imgui.h>
+#include <imgui_internal.h>
+#include <vortex/imgui/framebuffer.h>
 #define windowHeight 600
 #define windowWidth 800
 Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
 float lastFrame = 0.0f;
 bool firstMouse = true;
+bool cursorLocked = true;
 float lastX = windowWidth / 2.0f, lastY = windowHeight / 2.0f;
 void computeTangents(std::vector<Vertex> &vertices,
                      const std::vector<unsigned int> &indices) {
@@ -51,7 +57,6 @@ void computeTangents(std::vector<Vertex> &vertices,
     v0.bitangent = v1.bitangent = v2.bitangent = bitangent;
   }
 }
-
 int main() {
   glfwInit();
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -61,182 +66,60 @@ int main() {
       glfwCreateWindow(windowWidth, windowHeight, "Vortex", nullptr, nullptr);
   glfwMakeContextCurrent(window);
   gladLoadGL();
+
+  Layer imguiLayer(window);
+
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_CULL_FACE);
   glCullFace(GL_BACK);
 
   std::vector<Vertex> vertices = {
-      // front face
       {{-0.5f, -0.5f, 0.5f}, {0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
       {{0.5f, -0.5f, 0.5f}, {1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
       {{0.5f, 0.5f, 0.5f}, {1.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
       {{-0.5f, 0.5f, 0.5f}, {0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
-
-      // back face
       {{0.5f, -0.5f, -0.5f}, {0.0f, 0.0f}, {0.0f, 0.0f, -1.0f}},
       {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f}, {0.0f, 0.0f, -1.0f}},
       {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f}, {0.0f, 0.0f, -1.0f}},
       {{0.5f, 0.5f, -0.5f}, {0.0f, 1.0f}, {0.0f, 0.0f, -1.0f}},
-
-      // left face
       {{-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}},
       {{-0.5f, -0.5f, 0.5f}, {1.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}},
       {{-0.5f, 0.5f, 0.5f}, {1.0f, 1.0f}, {-1.0f, 0.0f, 0.0f}},
       {{-0.5f, 0.5f, -0.5f}, {0.0f, 1.0f}, {-1.0f, 0.0f, 0.0f}},
-
-      // right face
       {{0.5f, -0.5f, 0.5f}, {0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}},
       {{0.5f, -0.5f, -0.5f}, {1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}},
       {{0.5f, 0.5f, -0.5f}, {1.0f, 1.0f}, {1.0f, 0.0f, 0.0f}},
       {{0.5f, 0.5f, 0.5f}, {0.0f, 1.0f}, {1.0f, 0.0f, 0.0f}},
-
-      // top face
       {{-0.5f, 0.5f, 0.5f}, {0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}},
       {{0.5f, 0.5f, 0.5f}, {1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}},
       {{0.5f, 0.5f, -0.5f}, {1.0f, 1.0f}, {0.0f, 1.0f, 0.0f}},
       {{-0.5f, 0.5f, -0.5f}, {0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}},
-
-      // bottom face
       {{-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f}, {0.0f, -1.0f, 0.0f}},
       {{0.5f, -0.5f, -0.5f}, {1.0f, 0.0f}, {0.0f, -1.0f, 0.0f}},
       {{0.5f, -0.5f, 0.5f}, {1.0f, 1.0f}, {0.0f, -1.0f, 0.0f}},
       {{-0.5f, -0.5f, 0.5f}, {0.0f, 1.0f}, {0.0f, -1.0f, 0.0f}},
   };
-
   std::vector<unsigned int> indices = {
-      0,  1,  2,  2,  3,  0,  // front
-      4,  5,  6,  6,  7,  4,  // back
-      8,  9,  10, 10, 11, 8,  // left
-      12, 13, 14, 14, 15, 12, // right
-      16, 17, 18, 18, 19, 16, // top
-      20, 21, 22, 22, 23, 20, // bottom
+      0,  1,  2,  2,  3,  0,  4,  5,  6,  6,  7,  4,  8,  9,  10, 10, 11, 8,
+      12, 13, 14, 14, 15, 12, 16, 17, 18, 18, 19, 16, 20, 21, 22, 22, 23, 20,
   };
   computeTangents(vertices, indices);
   Mesh cube(vertices, indices);
+
   float skyboxVertices[] = {
-      // right face (+X)
-      1.0f,
-      -1.0f,
-      -1.0f,
-      1.0f,
-      -1.0f,
-      1.0f,
-      1.0f,
-      1.0f,
-      1.0f,
-      1.0f,
-      1.0f,
-      1.0f,
-      1.0f,
-      1.0f,
-      -1.0f,
-      1.0f,
-      -1.0f,
-      -1.0f,
-
-      // left face (-X)
-      -1.0f,
-      -1.0f,
-      1.0f,
-      -1.0f,
-      -1.0f,
-      -1.0f,
-      -1.0f,
-      1.0f,
-      -1.0f,
-      -1.0f,
-      1.0f,
-      -1.0f,
-      -1.0f,
-      1.0f,
-      1.0f,
-      -1.0f,
-      -1.0f,
-      1.0f,
-
-      // top face (+Y)
-      -1.0f,
-      1.0f,
-      -1.0f,
-      1.0f,
-      1.0f,
-      -1.0f,
-      1.0f,
-      1.0f,
-      1.0f,
-      1.0f,
-      1.0f,
-      1.0f,
-      -1.0f,
-      1.0f,
-      1.0f,
-      -1.0f,
-      1.0f,
-      -1.0f,
-
-      // bottom face (-Y)
-      -1.0f,
-      -1.0f,
-      -1.0f,
-      -1.0f,
-      -1.0f,
-      1.0f,
-      1.0f,
-      -1.0f,
-      1.0f,
-      1.0f,
-      -1.0f,
-      1.0f,
-      1.0f,
-      -1.0f,
-      -1.0f,
-      -1.0f,
-      -1.0f,
-      -1.0f,
-
-      // front face (+Z)
-      -1.0f,
-      -1.0f,
-      1.0f,
-      1.0f,
-      -1.0f,
-      1.0f,
-      1.0f,
-      1.0f,
-      1.0f,
-      1.0f,
-      1.0f,
-      1.0f,
-      -1.0f,
-      1.0f,
-      1.0f,
-      -1.0f,
-      -1.0f,
-      1.0f,
-
-      // back face (-Z)
-      1.0f,
-      -1.0f,
-      -1.0f,
-      -1.0f,
-      -1.0f,
-      -1.0f,
-      -1.0f,
-      1.0f,
-      -1.0f,
-      -1.0f,
-      1.0f,
-      -1.0f,
-      1.0f,
-      1.0f,
-      -1.0f,
-      1.0f,
-      -1.0f,
-      -1.0f,
+      1.0f,  -1.0f, -1.0f, 1.0f,  -1.0f, 1.0f,  1.0f,  1.0f,  1.0f,  1.0f,
+      1.0f,  1.0f,  1.0f,  1.0f,  -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f,
+      1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, 1.0f,  -1.0f,
+      -1.0f, 1.0f,  1.0f,  -1.0f, -1.0f, 1.0f,  -1.0f, 1.0f,  -1.0f, 1.0f,
+      1.0f,  -1.0f, 1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  -1.0f, 1.0f,
+      1.0f,  -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,
+      1.0f,  -1.0f, 1.0f,  1.0f,  -1.0f, 1.0f,  1.0f,  -1.0f, -1.0f, -1.0f,
+      -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,  1.0f,  -1.0f, 1.0f,  1.0f,  1.0f,
+      1.0f,  1.0f,  1.0f,  1.0f,  -1.0f, 1.0f,  1.0f,  -1.0f, -1.0f, 1.0f,
+      1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f,
+      1.0f,  -1.0f, 1.0f,  1.0f,  -1.0f, 1.0f,  -1.0f, -1.0f,
   };
-
   Mesh skyboxMesh(PositionsOnly{}, skyboxVertices, 36);
-  printf("skybox vertex count: %u \n", skyboxMesh.getVertexCount());
 
   std::vector<Vertex> planeVerts = {
       {{-5.0f, -0.5f, -5.0f}, {0.0f, 5.0f}, {0.0f, 1.0f, 0.0f}},
@@ -247,75 +130,114 @@ int main() {
   std::vector<unsigned int> planeIndices = {0, 1, 2, 2, 3, 0};
   computeTangents(planeVerts, planeIndices);
   Mesh floor(planeVerts, planeIndices);
+
   Shader shader("./resources/triangle.vert", "./resources/triangle.frag");
+  Shader skyboxShader("./resources/skybox.vert", "./resources/skybox.frag");
+  Shader shadowShader("./resources/shadow.vert", "./resources/shadow.frag");
   Texture texture("./resources/brick.png");
   Texture normal("./resources/brickNormal.png");
-  // capture mouse
-  glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-  // mouse callback
+  Cubemap skybox({
+      "./resources/skybox/px.png",
+      "./resources/skybox/nx.png",
+      "./resources/skybox/py.png",
+      "./resources/skybox/ny.png",
+      "./resources/skybox/pz.png",
+      "./resources/skybox/nz.png",
+  });
+
+  ShadowMap shadowMap(1024, 1024);
+  Framebuffer sceneBuffer(1280, 720);
+
+  glfwSetFramebufferSizeCallback(window,
+                                 [](GLFWwindow *w, int width, int height) {
+                                   glViewport(0, 0, width, height);
+                                 });
+
   glfwSetCursorPosCallback(window, [](GLFWwindow *w, double x, double y) {
-    // use a global or glfwSetWindowUserPointer to reach your camera
+    ImGui_ImplGlfw_CursorPosCallback(w, x, y);
+    if (!cursorLocked)
+      return;
     if (firstMouse) {
       lastX = x;
       lastY = y;
       firstMouse = false;
     }
-    camera.processMouse(x - lastX, lastY - y); // y inverted
+    camera.processMouse(x - lastX, lastY - y);
     lastX = x;
     lastY = y;
   });
-  glm::vec3 lightPos(2.0f, 8.0f, 4.0f);
 
-  Cubemap skybox({
-      "./resources/skybox/px.png", // right
-      "./resources/skybox/nx.png", // left
-      "./resources/skybox/py.png", // top
-      "./resources/skybox/ny.png", // bottom
-      "./resources/skybox/pz.png", // front
-      "./resources/skybox/nz.png", // back
+  glfwSetScrollCallback(window, [](GLFWwindow *w, double x, double y) {
+    ImGui_ImplGlfw_ScrollCallback(w, x, y);
+    if (cursorLocked)
+      camera.processScroll((float)y);
   });
-  glfwSetFramebufferSizeCallback(window,
-                                 [](GLFWwindow *w, int width, int height) {
-                                   glViewport(0, 0, width, height);
-                                 });
-  Shader skyboxShader("./resources/skybox.vert", "./resources/skybox.frag");
 
-  ShadowMap shadowMap(1024, 1024);
-  Shader shadowShader("./resources/shadow.vert", "./resources/shadow.frag");
-  float debugQuad[] = {
-      -1.0f, 1.0f, 0.0f, 1.0f, -1.0f, 0.5f, 0.0f, 0.0f, -0.5f, 0.5f, 1.0f, 0.0f,
-      -1.0f, 1.0f, 0.0f, 1.0f, -0.5f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f, 1.0f, 1.0f,
-  };
+  glfwSetMouseButtonCallback(
+      window, [](GLFWwindow *w, int button, int action, int mods) {
+        ImGui_ImplGlfw_MouseButtonCallback(w, button, action, mods);
+      });
 
-  GLuint debugVAO, debugVBO;
-  glGenVertexArrays(1, &debugVAO);
-  glGenBuffers(1, &debugVBO);
-  glBindVertexArray(debugVAO);
-  glBindBuffer(GL_ARRAY_BUFFER, debugVBO);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(debugQuad), debugQuad, GL_STATIC_DRAW);
-  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)0);
-  glEnableVertexAttribArray(0);
-  glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float),
-                        (void *)(2 * sizeof(float)));
-  glEnableVertexAttribArray(1);
-  Shader debugShader("./resources/debug.vert", "./resources/debug.frag");
+  glfwSetKeyCallback(
+      window, [](GLFWwindow *w, int key, int scancode, int action, int mods) {
+        ImGui_ImplGlfw_KeyCallback(w, key, scancode, action, mods);
+      });
+
+  glfwSetCharCallback(window, [](GLFWwindow *w, unsigned int c) {
+    ImGui_ImplGlfw_CharCallback(w, c);
+  });
+
+  glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
+  glm::vec3 lightPos(3.0f, 10.0f, 6.0f);
+
+  static glm::vec3 dirDirection(-2.0f, -8.0f, -4.0f);
+  static glm::vec3 dirAmbient(0.3f);
+  static glm::vec3 dirDiffuse(0.8f);
+  static glm::vec3 dirSpecular(1.0f);
+  static glm::vec3 pl0Pos(2.0f, 2.0f, 2.0f);
+  static float pl0Linear = 0.09f, pl0Quadratic = 0.032f;
+  static glm::vec3 pl1Pos(-2.0f, 1.0f, -2.0f);
+  static float pl1Linear = 0.09f, pl1Quadratic = 0.032f;
+  static float cutOff = 12.5f, outerCutOff = 17.5f;
+  static glm::vec3 shadowLightPos(3.0f, 10.0f, 6.0f);
+  static float orthoSize = 8.0f;
+  static bool spotlightOn = false;
 
   while (!glfwWindowShouldClose(window)) {
     float now = glfwGetTime();
     float deltaTime = now - lastFrame;
     lastFrame = now;
 
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-      camera.processKeyboard(CameraDirection::FORWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-      camera.processKeyboard(CameraDirection::BACKWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-      camera.processKeyboard(CameraDirection::LEFT, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-      camera.processKeyboard(CameraDirection::RIGHT, deltaTime);
+    // must be first — before any ImGui:: calls
+    imguiLayer.begin();
 
-    static bool spotlightOn = false;
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+      glfwSetWindowShouldClose(window, true);
+
+    static bool tabWasPressed = false;
+    bool tabPressed = glfwGetKey(window, GLFW_KEY_TAB) == GLFW_PRESS;
+    if (tabPressed && !tabWasPressed) {
+      cursorLocked = !cursorLocked;
+      firstMouse = true;
+      glfwSetInputMode(window, GLFW_CURSOR,
+                       cursorLocked ? GLFW_CURSOR_DISABLED
+                                    : GLFW_CURSOR_NORMAL);
+    }
+    tabWasPressed = tabPressed;
+
+    if (cursorLocked) {
+      if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        camera.processKeyboard(CameraDirection::FORWARD, deltaTime);
+      if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        camera.processKeyboard(CameraDirection::BACKWARD, deltaTime);
+      if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        camera.processKeyboard(CameraDirection::LEFT, deltaTime);
+      if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        camera.processKeyboard(CameraDirection::RIGHT, deltaTime);
+    }
+
     static bool fWasPressed = false;
     bool fPressed = glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS;
     if (fPressed && !fWasPressed)
@@ -328,15 +250,17 @@ int main() {
     glm::mat4 model = glm::mat4(1.0f);
     model = glm::rotate(model, now * 0.5f, glm::vec3(0.0f, 1.0f, 0.0f));
     glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
-
     glm::mat4 floorModel = glm::mat4(1.0f);
     glm::mat3 floorNormal = glm::transpose(glm::inverse(glm::mat3(floorModel)));
-
     glm::mat4 view = camera.getViewMatrix();
     glm::mat4 projection = glm::perspective(
-        glm::radians(camera.fov), (float)fbWidth / fbHeight, 0.1f, 100.0f);
+        glm::radians(camera.fov),
+        sceneBuffer.width > 0 ? (float)sceneBuffer.width / sceneBuffer.height
+                              : 1.0f,
+        0.1f, 100.0f);
 
-    shadowMap.updateLightSpace(lightPos, glm::vec3(0.0f), 1.0f, 20.0f, 5.0f);
+    shadowMap.updateLightSpace(shadowLightPos, glm::vec3(0.0f), 1.0f, 30.0f,
+                               orthoSize);
 
     // --- pass 1: shadow ---
     shadowMap.bindForWriting();
@@ -351,11 +275,9 @@ int main() {
     glCullFace(GL_BACK);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-    // --- reset viewport ---
-    glViewport(0, 0, fbWidth, fbHeight);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    // --- pass 2: scene into framebuffer ---
+    sceneBuffer.bind();
 
-    // --- skybox ---
     glDepthMask(GL_FALSE);
     glDisable(GL_CULL_FACE);
     skyboxShader.use();
@@ -366,7 +288,6 @@ int main() {
     skyboxMesh.draw();
     glDepthMask(GL_TRUE);
 
-    // --- set ALL uniforms before ANY draw calls ---
     shader.use();
     shader.setMat4("view", view);
     shader.setMat4("projection", projection);
@@ -375,62 +296,140 @@ int main() {
     shader.setInt("tex", 0);
     shader.setInt("normalMap", 1);
     shader.setInt("shadowMap", 2);
-
-    shader.setVec3("dirLight.direction",
-                   glm::normalize(glm::vec3(0.0f) - lightPos));
-    shader.setVec3("dirLight.ambient", glm::vec3(0.3f));
-    shader.setVec3("dirLight.diffuse", glm::vec3(0.8f));
-    shader.setVec3("dirLight.specular", glm::vec3(1.0f));
-
-    glm::vec3 pointLightPositions[] = {
-        {2.0f, 2.0f, 2.0f},
-        {-2.0f, 1.0f, -2.0f},
-    };
+    shader.setVec3("dirLight.direction", dirDirection);
+    shader.setVec3("dirLight.ambient", dirAmbient);
+    shader.setVec3("dirLight.diffuse", dirDiffuse);
+    shader.setVec3("dirLight.specular", dirSpecular);
     shader.setInt("numPointLights", 2);
-    for (int i = 0; i < 2; i++) {
-      std::string b = "pointLights[" + std::to_string(i) + "].";
-      shader.setVec3(b + "position", pointLightPositions[i]);
-      shader.setFloat(b + "constant", 1.0f);
-      shader.setFloat(b + "linear", 0.09f);
-      shader.setFloat(b + "quadratic", 0.032f);
-      shader.setVec3(b + "ambient", glm::vec3(0.2f));
-      shader.setVec3(b + "diffuse", glm::vec3(0.8f));
-      shader.setVec3(b + "specular", glm::vec3(1.0f));
-    }
-
+    shader.setVec3("pointLights[0].position", pl0Pos);
+    shader.setFloat("pointLights[0].constant", 1.0f);
+    shader.setFloat("pointLights[0].linear", pl0Linear);
+    shader.setFloat("pointLights[0].quadratic", pl0Quadratic);
+    shader.setVec3("pointLights[0].ambient", glm::vec3(0.2f));
+    shader.setVec3("pointLights[0].diffuse", glm::vec3(0.8f));
+    shader.setVec3("pointLights[0].specular", glm::vec3(1.0f));
+    shader.setVec3("pointLights[1].position", pl1Pos);
+    shader.setFloat("pointLights[1].constant", 1.0f);
+    shader.setFloat("pointLights[1].linear", pl1Linear);
+    shader.setFloat("pointLights[1].quadratic", pl1Quadratic);
+    shader.setVec3("pointLights[1].ambient", glm::vec3(0.2f));
+    shader.setVec3("pointLights[1].diffuse", glm::vec3(0.8f));
+    shader.setVec3("pointLights[1].specular", glm::vec3(1.0f));
     shader.setBool("useSpotLight", spotlightOn);
     shader.setVec3("spotLight.position", camera.position);
     shader.setVec3("spotLight.direction", camera.front);
     shader.setVec3("spotLight.ambient", glm::vec3(0.0f));
     shader.setVec3("spotLight.diffuse", glm::vec3(1.0f));
     shader.setVec3("spotLight.specular", glm::vec3(1.0f));
-    shader.setFloat("spotLight.cutOff", glm::cos(glm::radians(12.5f)));
-    shader.setFloat("spotLight.outerCutOff", glm::cos(glm::radians(17.5f)));
+    shader.setFloat("spotLight.cutOff", glm::cos(glm::radians(cutOff)));
+    shader.setFloat("spotLight.outerCutOff",
+                    glm::cos(glm::radians(outerCutOff)));
 
     texture.bind(0);
     normal.bind(1);
     shadowMap.bindForReading(2);
 
-    // --- draw floor ---
     glDisable(GL_CULL_FACE);
     shader.setMat4("model", floorModel);
     shader.setMat3("normalMatrix", floorNormal);
     floor.draw();
 
-    // --- draw cube ---
     glEnable(GL_CULL_FACE);
     shader.setMat4("model", model);
-    shader.setMat3("normalMatrix",
-                   normalMatrix); // lowercase n — matches shader
+    shader.setMat3("normalMatrix", normalMatrix);
     cube.draw();
 
-    glDisable(GL_DEPTH_TEST);
-    debugShader.use();
-    debugShader.setInt("depthMap", 2);
-    shadowMap.bindForReading(2);
-    glBindVertexArray(debugVAO);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-    glEnable(GL_DEPTH_TEST);
+    sceneBuffer.unbind();
+
+    // --- reset to screen ---
+    glViewport(0, 0, fbWidth, fbHeight);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    // --- imgui panels ---
+    ImGuiWindowFlags dockFlags =
+        ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus |
+        ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoBackground;
+
+    ImGuiViewport *vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(vp->Pos);
+    ImGui::SetNextWindowSize(vp->Size);
+    ImGui::SetNextWindowViewport(vp->ID);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::Begin("DockSpace", nullptr, dockFlags);
+    ImGui::PopStyleVar();
+
+    ImGuiID dockID = ImGui::GetID("MainDockSpace");
+
+    static bool dockLayoutBuilt = false;
+    if (!dockLayoutBuilt) {
+      dockLayoutBuilt = true;
+      ImGui::DockBuilderRemoveNode(dockID);
+      ImGui::DockBuilderAddNode(dockID, ImGuiDockNodeFlags_DockSpace);
+      ImGui::DockBuilderSetNodeSize(dockID, ImGui::GetMainViewport()->Size);
+
+      ImGuiID dockRight;
+      ImGuiID dockMain = ImGui::DockBuilderSplitNode(
+          dockID, ImGuiDir_Left, 0.75f, nullptr, &dockRight);
+
+      ImGui::DockBuilderDockWindow("Viewport", dockMain);
+      ImGui::DockBuilderDockWindow("Lighting", dockRight);
+      ImGui::DockBuilderDockWindow("Camera", dockRight);
+      ImGui::DockBuilderFinish(dockID);
+    }
+
+    ImGui::DockSpace(dockID, ImVec2(0, 0),
+                     ImGuiDockNodeFlags_PassthruCentralNode);
+    ImGui::End();
+    ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_FirstUseEver);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::Begin("Viewport");
+    ImVec2 panelSize = ImGui::GetContentRegionAvail();
+    if (panelSize.x > 1 && panelSize.y > 1) {
+      if ((int)panelSize.x != sceneBuffer.width ||
+          (int)panelSize.y != sceneBuffer.height)
+        sceneBuffer.resize((int)panelSize.x, (int)panelSize.y);
+      ImGui::Image((ImTextureID)(uintptr_t)sceneBuffer.colorTexture, panelSize,
+                   ImVec2(0, 1), ImVec2(1, 0));
+    }
+    ImGui::End();
+    ImGui::PopStyleVar();
+
+    ImGui::Begin("Lighting");
+    ImGui::SeparatorText("Directional light");
+    ImGui::DragFloat3("Direction", &dirDirection.x, 0.01f);
+    ImGui::ColorEdit3("Ambient", &dirAmbient.x);
+    ImGui::ColorEdit3("Diffuse", &dirDiffuse.x);
+    ImGui::ColorEdit3("Specular", &dirSpecular.x);
+    ImGui::SeparatorText("Point light 0");
+    ImGui::DragFloat3("Position##pl0", &pl0Pos.x, 0.1f);
+    ImGui::SliderFloat("Linear##pl0", &pl0Linear, 0.0f, 1.0f);
+    ImGui::SliderFloat("Quadratic##pl0", &pl0Quadratic, 0.0f, 1.0f);
+    ImGui::SeparatorText("Point light 1");
+    ImGui::DragFloat3("Position##pl1", &pl1Pos.x, 0.1f);
+    ImGui::SliderFloat("Linear##pl1", &pl1Linear, 0.0f, 1.0f);
+    ImGui::SliderFloat("Quadratic##pl1", &pl1Quadratic, 0.0f, 1.0f);
+    ImGui::SeparatorText("Spotlight");
+    ImGui::Checkbox("Enable spotlight", &spotlightOn);
+    ImGui::SliderFloat("Cut off", &cutOff, 1.0f, 45.0f);
+    ImGui::SliderFloat("Outer cut off", &outerCutOff, 1.0f, 45.0f);
+    ImGui::SeparatorText("Shadow");
+    ImGui::DragFloat3("Light pos##shadow", &shadowLightPos.x, 0.1f);
+    ImGui::SliderFloat("Ortho size", &orthoSize, 1.0f, 50.0f);
+    ImGui::End();
+
+    ImGui::Begin("Camera");
+    ImGui::Text("Position: %.2f %.2f %.2f", camera.position.x,
+                camera.position.y, camera.position.z);
+    ImGui::Text("Cursor: %s", cursorLocked ? "locked (Tab)" : "unlocked (Tab)");
+    ImGui::SliderFloat("Speed", &camera.speed, 0.1f, 20.0f);
+    ImGui::SliderFloat("Sensitivity", &camera.sensitivity, 0.01f, 1.0f);
+    ImGui::SliderFloat("FOV", &camera.fov, 10.0f, 120.0f);
+    ImGui::End();
+
+    imguiLayer.end();
 
     glfwSwapBuffers(window);
     glfwPollEvents();
@@ -438,6 +437,5 @@ int main() {
 
   glfwDestroyWindow(window);
   glfwTerminate();
-  printf("Hello, Vortex!");
   return 0;
 }
