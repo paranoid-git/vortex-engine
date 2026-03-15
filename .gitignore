@@ -1,4 +1,6 @@
 build
 CMakeFiles
+resources/skybox
+resources/skybox/*
 resources/brick.png
 resources/brickNormal.png
