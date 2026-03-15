@@ -17,6 +17,7 @@
 #include "vortex/matrix/camera.h"
 #include "vortex/model/mesh.h"
 #include "vortex/rendering/shadowMap.h"
+#include "vortex/scene/scene.h"
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <vortex/imgui/framebuffer.h>
@@ -104,7 +105,18 @@ int main() {
       12, 13, 14, 14, 15, 12, 16, 17, 18, 18, 19, 16, 20, 21, 22, 22, 23, 20,
   };
   computeTangents(vertices, indices);
-  Mesh cube(vertices, indices);
+  Scene scene;
+
+  auto cubeObj = std::make_shared<GameObject>("Cube");
+  cubeObj->mesh = std::make_shared<Mesh>(vertices, indices);
+  cubeObj->material.shader = std::make_shared<Shader>(
+      "./resources/triangle.vert", "./resources/triangle.frag");
+  cubeObj->material.diffuse =
+      std::make_shared<Texture>("./resources/brick.png");
+  cubeObj->material.normalMap =
+      std::make_shared<Texture>("./resources/brickNormal.png");
+  cubeObj->transform.position = glm::vec3(0.0f, 0.0f, 0.0f);
+  scene.add(cubeObj);
 
   float skyboxVertices[] = {
       1.0f,  -1.0f, -1.0f, 1.0f,  -1.0f, 1.0f,  1.0f,  1.0f,  1.0f,  1.0f,
@@ -129,13 +141,17 @@ int main() {
   };
   std::vector<unsigned int> planeIndices = {0, 1, 2, 2, 3, 0};
   computeTangents(planeVerts, planeIndices);
-  Mesh floor(planeVerts, planeIndices);
 
-  Shader shader("./resources/triangle.vert", "./resources/triangle.frag");
+  auto floorObj = std::make_shared<GameObject>("Floor");
+  floorObj->mesh = std::make_shared<Mesh>(planeVerts, planeIndices);
+  floorObj->material.shader = cubeObj->material.shader;   // share shader
+  floorObj->material.diffuse = cubeObj->material.diffuse; // share texture
+  floorObj->material.normalMap = cubeObj->material.normalMap;
+  floorObj->transform.position = glm::vec3(0.0f);
+  scene.add(floorObj);
+
   Shader skyboxShader("./resources/skybox.vert", "./resources/skybox.frag");
   Shader shadowShader("./resources/shadow.vert", "./resources/shadow.frag");
-  Texture texture("./resources/brick.png");
-  Texture normal("./resources/brickNormal.png");
 
   Cubemap skybox({
       "./resources/skybox/px.png",
@@ -268,10 +284,7 @@ int main() {
     glCullFace(GL_FRONT);
     shadowShader.use();
     shadowShader.setMat4("lightSpaceMatrix", shadowMap.lightSpaceMatrix);
-    shadowShader.setMat4("model", floorModel);
-    floor.draw();
-    shadowShader.setMat4("model", model);
-    cube.draw();
+    scene.drawShadow(shadowShader);
     glCullFace(GL_BACK);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
@@ -287,7 +300,11 @@ int main() {
     skybox.bind(1);
     skyboxMesh.draw();
     glDepthMask(GL_TRUE);
+    cubeObj->material.diffuse->bind(0);
+    cubeObj->material.normalMap->bind(1);
 
+    shadowMap.bindForReading(2);
+    auto &shader = *cubeObj->material.shader;
     shader.use();
     shader.setMat4("view", view);
     shader.setMat4("projection", projection);
@@ -324,23 +341,11 @@ int main() {
     shader.setFloat("spotLight.cutOff", glm::cos(glm::radians(cutOff)));
     shader.setFloat("spotLight.outerCutOff",
                     glm::cos(glm::radians(outerCutOff)));
-
-    texture.bind(0);
-    normal.bind(1);
-    shadowMap.bindForReading(2);
-
-    glDisable(GL_CULL_FACE);
-    shader.setMat4("model", floorModel);
-    shader.setMat3("normalMatrix", floorNormal);
-    floor.draw();
-
-    glEnable(GL_CULL_FACE);
-    shader.setMat4("model", model);
-    shader.setMat3("normalMatrix", normalMatrix);
-    cube.draw();
+    scene.draw(shader);
 
     sceneBuffer.unbind();
 
+    cubeObj->transform.rotation.y = now * 28.6f;
     // --- reset to screen ---
     glViewport(0, 0, fbWidth, fbHeight);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -369,11 +374,15 @@ int main() {
       ImGui::DockBuilderAddNode(dockID, ImGuiDockNodeFlags_DockSpace);
       ImGui::DockBuilderSetNodeSize(dockID, ImGui::GetMainViewport()->Size);
 
-      ImGuiID dockRight;
+      ImGuiID dockRight, dockRightBottom;
       ImGuiID dockMain = ImGui::DockBuilderSplitNode(
           dockID, ImGuiDir_Left, 0.75f, nullptr, &dockRight);
+      ImGuiID dockRightTop = ImGui::DockBuilderSplitNode(
+          dockRight, ImGuiDir_Up, 0.5f, nullptr, &dockRightBottom);
 
       ImGui::DockBuilderDockWindow("Viewport", dockMain);
+      ImGui::DockBuilderDockWindow("Hierarchy", dockRightTop);
+      ImGui::DockBuilderDockWindow("Inspector", dockRightBottom);
       ImGui::DockBuilderDockWindow("Lighting", dockRight);
       ImGui::DockBuilderDockWindow("Camera", dockRight);
       ImGui::DockBuilderFinish(dockID);
@@ -429,6 +438,26 @@ int main() {
     ImGui::SliderFloat("FOV", &camera.fov, 10.0f, 120.0f);
     ImGui::End();
 
+    ImGui::Begin("Hierarchy");
+    for (auto &obj : scene.objects) {
+      bool isSelected = (scene.selected == obj);
+      if (ImGui::Selectable(obj->name.c_str(), isSelected))
+        scene.selected = obj;
+    }
+    ImGui::End();
+
+    // inspector panel
+    if (scene.selected) {
+      ImGui::Begin("Inspector");
+      ImGui::Text("%s", scene.selected->name.c_str());
+      ImGui::SeparatorText("Transform");
+      ImGui::DragFloat3("Position", &scene.selected->transform.position.x,
+                        0.1f);
+      ImGui::DragFloat3("Rotation", &scene.selected->transform.rotation.x,
+                        1.0f);
+      ImGui::DragFloat3("Scale", &scene.selected->transform.scale.x, 0.01f);
+      ImGui::End();
+    }
     imguiLayer.end();
 
     glfwSwapBuffers(window);
