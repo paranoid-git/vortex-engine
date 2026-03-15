@@ -5,7 +5,7 @@
 #include <memory>
 #include <string>
 #include <vector>
-
+#include <vortex/model/model.h>
 class GameObject {
 public:
   std::string name;
@@ -15,6 +15,7 @@ public:
   bool selected = false;
 
   std::shared_ptr<Mesh> mesh;
+  std::shared_ptr<Model> model; // for loaded models
 
   // children for hierarchy
   std::vector<std::shared_ptr<GameObject>> children;
@@ -39,12 +40,22 @@ public:
   }
 
   void draw(Shader &shader) const {
-    if (!visible || !mesh)
+    printf("GameObject::draw %s visible=%d\n", name.c_str(), visible);
+    if (!visible)
       return;
+    if (!mesh && !model) {
+      printf("  skipping — no mesh or model\n");
+      return;
+    }
     shader.setMat4("model", getWorldMatrix());
     shader.setMat3("normalMatrix", getWorldNormalMatrix());
-
-    mesh->draw();
+    if (model) {
+      printf("  drawing model with %zu meshes\n", model->meshes.size());
+      model->draw(shader);
+    } else if (mesh) {
+      printf("  drawing mesh\n");
+      mesh->draw();
+    }
     for (auto &child : children)
       child->draw(shader);
   }
@@ -53,8 +64,14 @@ public:
   void drawShadow(Shader &shadowShader) const {
     if (!visible || !mesh)
       return;
+
     shadowShader.setMat4("model", getWorldMatrix());
-    mesh->draw();
+    if (model) {
+      for (auto &m : model->meshes)
+        m.mesh->draw();
+    } else if (mesh) {
+      mesh->draw();
+    }
     for (auto &child : children)
       child->drawShadow(shadowShader);
   }

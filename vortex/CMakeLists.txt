@@ -20,6 +20,9 @@ target_include_directories(vortex_libs
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
 
 )
+find_package(assimp REQUIRED)
+
 target_include_directories(vortex_libs
   PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
+target_link_libraries(vortex_libs assimp)

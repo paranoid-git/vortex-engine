@@ -29,8 +29,13 @@ public:
   }
 
   void draw(Shader &shader) const {
-    for (auto &obj : objects)
+    printf("scene draw, %zu objects\n", objects.size());
+    for (auto &obj : objects) {
+      printf("  drawing %s, visible=%d, mesh=%s, model=%s\n", obj->name.c_str(),
+             obj->visible, obj->mesh ? "yes" : "null",
+             obj->model ? "yes" : "null");
       obj->draw(shader);
+    }
   }
 
   void drawShadow(Shader &shadowShader) const {

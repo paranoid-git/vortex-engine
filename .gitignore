@@ -4,3 +4,6 @@ resources/skybox
 resources/skybox/*
 resources/brick.png
 resources/brickNormal.png
+resources/models
+resources/models/*
+resources/models/model.obj

@@ -150,6 +150,11 @@ int main() {
   floorObj->transform.position = glm::vec3(0.0f);
   scene.add(floorObj);
 
+  auto site = std::make_shared<GameObject>("Site");
+  site->model = std::make_shared<Model>("./resources/models/model.glb");
+  site->transform.scale = glm::vec3(0.02f);
+  site->transform.position = glm::vec3(-0.3f, -0.3f, 0.0f); // rough center
+  scene.add(site);
   Shader skyboxShader("./resources/skybox.vert", "./resources/skybox.frag");
   Shader shadowShader("./resources/shadow.vert", "./resources/shadow.frag");
 
@@ -388,8 +393,7 @@ int main() {
       ImGui::DockBuilderFinish(dockID);
     }
 
-    ImGui::DockSpace(dockID, ImVec2(0, 0),
-                     ImGuiDockNodeFlags_PassthruCentralNode);
+    ImGui::DockSpace(dockID, ImVec2(0, 0), ImGuiDockNodeFlags_None);
     ImGui::End();
     ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_FirstUseEver);
