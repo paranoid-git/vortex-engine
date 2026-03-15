@@ -18,9 +18,9 @@ public:
   void processKeyboard(CameraDirection dir, float deltaTime);
   void processMouse(float xOffset, float yOffset);
   void processScroll(float yOffset);
+  glm::vec3 front = glm::vec3(0.0f, 0.0f, -1.0f);
 
 private:
-  glm::vec3 front = glm::vec3(0.0f, 0.0f, -1.0f);
   glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
   glm::vec3 right;
   void updateVectors();
