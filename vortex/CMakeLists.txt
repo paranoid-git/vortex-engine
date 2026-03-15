@@ -1,5 +1,5 @@
-file(GLOB_RECURSE VORTEX_SOURCES 
-    "src/*.cpp" 
+file(GLOB_RECURSE VORTEX_SOURCES
+    "src/*.cpp"
     "src/*/*.cpp"
     "src/*/*/*.cpp"
     "src/*.c"
@@ -15,7 +15,11 @@ file(GLOB_RECURSE VORTEX_SOURCES
 add_library(vortex_libs STATIC ${VORTEX_SOURCES})
 
 
-target_include_directories(vortex_libs 
-  
+target_include_directories(vortex_libs
+
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
+
+)
+target_include_directories(vortex_libs
+  PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
